@@ -113,6 +113,17 @@ public class Layout implements Cloneable {
         }
     }
 
+    public void drawBaseShape(Graphics2D g2) {
+        if (!openBase.isEmpty() && base.isEmpty()) {
+            FontMetrics fm = g2.getFontMetrics();
+            int strWidth = fm.stringWidth("Click");
+            g2.drawString("Click",
+                    Const.BASE_STARTX + (Const.CARD_WIDTH - strWidth) / 2,
+                    (int) (Const.BASE_STARTY + 1. / 2 * Const.CARD_HEIGHT));
+        }
+        g2.drawRect(Const.BASE_STARTX - 2, Const.BASE_STARTY - 2, Const.CARD_WIDTH + 4, Const.CARD_HEIGHT + 4);
+    }
+
     // deep clone all containing collections to get the card states for all moves
     @Override
     protected Object clone() throws CloneNotSupportedException {

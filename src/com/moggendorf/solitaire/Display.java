@@ -55,6 +55,8 @@ public class Display extends JPanel {
         Graphics2D g2 = (Graphics2D) g;
         // shape of the foundation
         layout.drawFoundationShape(g2);
+        // shape for the base
+        layout.drawBaseShape(g2);
         // columns cards
         for (LinkedList<Card> cards : layout.getColumns())
             for (Card card : cards)
