@@ -41,7 +41,7 @@ public class InfoPanel extends JPanel {
             if (evt.getSource() == newGame) {
                 display.startNewGame();
             } else if (evt.getSource() == quit) {
-                System.exit(0);
+                display.endGame();
             } else if (evt.getSource() == back) {
                 display.restorePrevState();
             }

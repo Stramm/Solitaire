@@ -44,6 +44,10 @@ public class Display extends JPanel {
         repaint();
     }
 
+    public void endGame() {
+        System.exit(0);
+    }
+
 
     @Override
     protected void paintComponent(Graphics g) {
@@ -70,12 +74,12 @@ public class Display extends JPanel {
         for (Card card : draggedCards)
             card.drawCard(g2);
     }
-
     class MyMouseListener extends MouseAdapter {
         private boolean selected;
         private int dx;
         private int dy;
         private int origin;
+
         private Source source;
 
 
@@ -109,7 +113,7 @@ public class Display extends JPanel {
 
                     draggedCards.add(layout.getOpenBase().pollLast());
                     source = Source.BASE;
-                    if (!tryFitsOnFoundation()) {
+                    if (!tryFitsOnFoundation() && !tryFitsOnColumn()) {
                         backToOrigin();
                         repaint();
                     }
@@ -120,25 +124,38 @@ public class Display extends JPanel {
                         if (column.isEmpty())
                             continue;
 
-                        if (e.getY() > getColumnY(idx) && e.getY() < getColumnY(idx) + Const.CARD_HEIGHT
-                                && e.getX() > getColumnX(idx) && e.getX() < getColumnX(idx) + Const.CARD_WIDTH) {
-                            // rmb on columns
-                            selectToDrag(getColumn(idx), getColumn(idx).size() - 1);
-                            origin = idx;
-                            source = Source.COLUMN;
+                        for (int idy = column.size() - 1; idy >= 0; idy--) {
+                            Card currCard = column.get(idy);
 
-                            if (!tryFitsOnFoundation()) {
-                                backToOrigin();
-                                repaint();
+                            // if the card is not faceup, then we can continue
+                            if (!currCard.isFaceUp())
+                                break; // to next column
+                            if (e.getX() > currCard.getX() && e.getX() < currCard.getX() + Const.CARD_WIDTH
+                                    && e.getY() > currCard.getY() && e.getY() < currCard.getY() + Const.CARD_HEIGHT) {
+                                // rmb on columns
+                                selectToDrag(getColumn(idx), idy);
+                                origin = idx;
+                                source = Source.COLUMN;
+
+                                if (draggedCards.size() == 1) {
+                                    if (!tryFitsOnFoundation() && !tryFitsOnColumn()) {
+                                        backToOrigin();
+                                        repaint();
+                                    }
+                                } else {
+                                    if (!tryFitsOnColumn()) {
+                                        backToOrigin();
+                                        repaint();
+                                    }
+                                }
                             }
                         }
-
                     } // end for idx;
                 }
             }
         }
-
         // checking here if the drag destination is valid
+
         @Override
         public void mouseReleased(MouseEvent e) {
             if (selected) {
@@ -217,8 +234,8 @@ public class Display extends JPanel {
                 backToOrigin();
             }
         }
-
         // here getting the cards to drag
+
         @Override
         public void mouseDragged(MouseEvent e) {
             // if the selected boolean is set, we have a filled draggedCards list
@@ -306,8 +323,8 @@ public class Display extends JPanel {
 
             }
         }
-
         // helper methods for the Adapter class
+
         private boolean tryFitsOnFoundation() {
             // now x, go through all foundation elements
             for (int idf = 0; idf < layout.getFoundation().size(); idf++) {
@@ -315,6 +332,8 @@ public class Display extends JPanel {
 
                 // is same color and value +1 or, if foundation is empty, an ace?
                 Card source = draggedCards.getFirst();
+                if (source == null)
+                    return false;
                 // 0, if empty or the value of the upper card
                 int targetValue = layout.getFoundation().get(idf).isEmpty() ? 0 : layout.getFoundation().get(idf).getLast().getValue();
                 if ((layout.getFoundation().get(idf).isEmpty() ||
@@ -323,6 +342,43 @@ public class Display extends JPanel {
 
                     updateDraggedPosition(currFoundationX, Const.FOUNDATION_STARTY);
                     moveToDestFoundation(idf);
+
+                    // faceUp if there's still a card on the origin column
+                    faceUp();
+                    saveState();
+                    repaint();
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private boolean tryFitsOnColumn() {
+            // now x, go through all foundation elements
+            for (int idc = 0; idc < Const.COLUMNS; idc++) {
+
+                if (source == Source.COLUMN && idc == origin) // don't test same column
+                    continue;
+
+                boolean move = false;
+                int currColumnX = getColumnX(idc);
+                int dy = Const.COLUMNS_STARTY;
+                // is same color and value +1 or, if foundation is empty, an ace?
+                Card source = draggedCards.getFirst();
+
+                if (layout.getColumns().get(idc).isEmpty()) {
+                    if (source.getValue() == 13) { // we can move a card on an empty list, if it is a king
+                        move = true;
+                    }
+                } else if (layout.getColumns().get(idc).getLast().getColor().isOppositeColor(source.getColor()) // same color
+                        && source.getValue() + 1 == layout.getColumns().get(idc).getLast().getValue()) {
+                    move = true;
+                    dy = layout.getColumns().get(idc).getLast().getY() + Const.CARD_DIST;
+                }
+
+                if (move) {
+                    updateDraggedPosition(currColumnX, dy);
+                    moveToDestColumn(idc);
 
                     // faceUp if there's still a card on the origin column
                     faceUp();
@@ -385,12 +441,12 @@ public class Display extends JPanel {
         private void moveToDestColumn(int idx) {
             getColumn(idx).addAll(draggedCards);
             draggedCards.clear();
+            testWin();
         }
 
         private void moveToDestFoundation(int idx) {
             layout.getFoundation().get(idx).addAll(draggedCards);
             draggedCards.clear();
-            //saveState();
             testWin();
         }
 
@@ -400,11 +456,56 @@ public class Display extends JPanel {
 
         }
 
-        private void testWin() {
-            if (layout.getOpenBase().isEmpty() && layout.getBase().isEmpty() && layout.isColumnsEmpty()) {
-                repaint();
-                JOptionPane.showMessageDialog(null, "You have won this game!", "You won", JOptionPane.INFORMATION_MESSAGE);
+        private boolean testWin() {
+            if (!layout.getOpenBase().isEmpty() || !layout.getBase().isEmpty())
+                return false; // base has to be empty for a win
+
+            // if all columns are in series... -> win
+            for (LinkedList<Card> column : layout.getColumns()) {
+                int prev = 0; // card values start at 1
+                for (Card card : column) {
+                    if (!card.isFaceUp())
+                        return false;
+                    if (prev >= card.getValue())
+                        return false;
+                }
             }
+            allColumnToFoundation();
+            int newGame = JOptionPane.showConfirmDialog(null, "You won this game! Start a new one?", "You won", JOptionPane.YES_NO_OPTION);
+            if (newGame == JOptionPane.YES_OPTION)
+                startNewGame();
+            else
+                endGame();
+
+            return true;
+        }
+
+        // win... move all column cards to foundation
+        private void allColumnToFoundation() {
+            for (int val = 1; val <= 13; val++) {
+                for (int i = 0; i < Const.COLUMNS; i++) {
+
+                    if (!getColumn(i).isEmpty() && getColumn(i).getLast().getValue() == val) {
+                        Card source = getColumn(i).removeLast();
+                        for (int idf = 0; idf < layout.getFoundation().size(); idf++) {
+
+                            int targetValue = layout.getFoundation().get(idf).isEmpty() ? 0 : layout.getFoundation().get(idf).getLast().getValue();
+                            if ((layout.getFoundation().get(idf).isEmpty() ||
+                                    layout.getFoundation().get(idf).getFirst().getColor() == source.getColor()) // same color
+                                    && source.getValue() == targetValue + 1) { // and next value
+
+
+                                source.setX(getFoundationX(idf));
+                                source.setY(Const.FOUNDATION_STARTY);
+
+                                layout.getFoundation().get(idf).add(source);
+
+                                repaint();
+                            }
+                        }
+                    }
+                }
+            } // end outer for
         }
 
         private void updateDraggedPosition(int dx, int dy) {
@@ -414,6 +515,7 @@ public class Display extends JPanel {
                 dy += Const.CARD_DIST;
             }
         }
+
     } // end MouseAdapter
 
     private void saveState() {
@@ -430,13 +532,18 @@ public class Display extends JPanel {
             return;
 
         if (!continuousRedo)
-                previousStates.pop();
+            previousStates.pop();
         continuousRedo = true;
+
+        if (previousStates.isEmpty()) {
+            saveState();
+            return;
+        }
 
         layout = previousStates.pop();
         draggedCards.clear();
 
-        if (previousStates.size() == 0)
+        if (previousStates.isEmpty())
             saveState();
 
         repaint();
