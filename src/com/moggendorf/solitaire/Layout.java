@@ -5,7 +5,7 @@ import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
 
-public class Layout {
+public class Layout implements Cloneable {
     private Deck deck;
     private List<LinkedList<Card>> columns;
     private List<LinkedList<Card>> foundation;
@@ -111,6 +111,29 @@ public class Layout {
             g2.drawRect(Const.FOUNDATION_STARTX - 2 + i * (Const.CARD_WIDTH + Const.FOUNDATION_DIST), Const.FOUNDATION_STARTY - 2,
                     Const.CARD_WIDTH + 4, Const.CARD_HEIGHT + 4);
         }
+    }
+
+    // deep clone all containing collections to get the card states for all moves
+    @Override
+    protected Object clone() throws CloneNotSupportedException {
+        super.clone();
+        Layout clone = new Layout();
+
+        for (Card card : base)
+            clone.getBase().add((Card)card.clone());
+
+        for (Card card : openBase)
+            clone.openBase.add((Card)card.clone());
+
+        for (int i = 0; i < Const.SUITS; i++)
+                for (Card card : foundation.get(i))
+                    clone.foundation.get(i).add((Card) card.clone());
+
+        for (int i = 0; i < Const.COLUMNS; i++)
+                for (Card card : columns.get(i))
+                    clone.columns.get(i).add((Card) card.clone());
+
+        return clone;
     }
 }
 

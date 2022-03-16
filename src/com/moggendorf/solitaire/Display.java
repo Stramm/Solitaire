@@ -5,12 +5,15 @@ import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.LinkedList;
+import java.util.Stack;
 
 public class Display extends JPanel {
     private Deck deck;
     private Layout layout;
+    private Stack<Layout> previousStates;
     private LinkedList<Card> draggedCards;
-    private InfoPanel info;
+    private boolean continuousRedo; // the first redo action needs to take two elements from the stack
+
 
     public Display() {
         initComponent();
@@ -18,6 +21,7 @@ public class Display extends JPanel {
 
     private void initComponent() {
         layout = new Layout();
+        previousStates = new Stack<>();
 
         MyMouseListener listener = new MyMouseListener();
         addMouseListener(listener);
@@ -33,9 +37,13 @@ public class Display extends JPanel {
         layout.setDeck(deck);
         layout.initLayout();
 
+        previousStates.clear();
         draggedCards.clear();
+        saveState();
+        continuousRedo = false;
         repaint();
     }
+
 
     @Override
     protected void paintComponent(Graphics g) {
@@ -61,7 +69,6 @@ public class Display extends JPanel {
         // the draggedCards... taken from its list and added to a temp list that's painted last... that way they stay on top
         for (Card card : draggedCards)
             card.drawCard(g2);
-
     }
 
     class MyMouseListener extends MouseAdapter {
@@ -92,6 +99,7 @@ public class Display extends JPanel {
                         layout.getBase().add(card);
                     }
                 }
+                saveState();
                 repaint();
 
                 // rmb on open base for quick drop to foundation
@@ -167,9 +175,10 @@ public class Display extends JPanel {
                             // now we have x (currColumnX) and y (startY) for the first card in draggedCards.
                             updateDraggedPosition(currColumnX, startY);
                             moveToDestColumn(idx);
-
                             // faceUp if there's still a card on the origin column
                             faceUp();
+
+                            saveState();
                             repaint();
                             return;
                         }
@@ -195,6 +204,8 @@ public class Display extends JPanel {
 
                                 // faceUp if there's still a card on the origin column
                                 faceUp();
+
+                                saveState();
                                 repaint();
                                 return;
                             }
@@ -302,9 +313,7 @@ public class Display extends JPanel {
             for (int idf = 0; idf < layout.getFoundation().size(); idf++) {
                 int currFoundationX = getFoundationX(idf);
 
-                //if (e.getX() > currFoundationX && e.getX() < currFoundationX + Const.CARD_WIDTH) {
                 // is same color and value +1 or, if foundation is empty, an ace?
-
                 Card source = draggedCards.getFirst();
                 // 0, if empty or the value of the upper card
                 int targetValue = layout.getFoundation().get(idf).isEmpty() ? 0 : layout.getFoundation().get(idf).getLast().getValue();
@@ -317,6 +326,7 @@ public class Display extends JPanel {
 
                     // faceUp if there's still a card on the origin column
                     faceUp();
+                    saveState();
                     repaint();
                     return true;
                 }
@@ -380,6 +390,7 @@ public class Display extends JPanel {
         private void moveToDestFoundation(int idx) {
             layout.getFoundation().get(idx).addAll(draggedCards);
             draggedCards.clear();
+            //saveState();
             testWin();
         }
 
@@ -403,5 +414,31 @@ public class Display extends JPanel {
                 dy += Const.CARD_DIST;
             }
         }
+    } // end MouseAdapter
+
+    private void saveState() {
+        continuousRedo = false;
+        try {
+            previousStates.push((Layout)layout.clone());
+        } catch (CloneNotSupportedException e) {
+            previousStates.clear();
+        }
+    }
+
+    public void restorePrevState() {
+        if (previousStates.isEmpty())
+            return;
+
+        if (!continuousRedo)
+                previousStates.pop();
+        continuousRedo = true;
+
+        layout = previousStates.pop();
+        draggedCards.clear();
+
+        if (previousStates.size() == 0)
+            saveState();
+
+        repaint();
     }
 }

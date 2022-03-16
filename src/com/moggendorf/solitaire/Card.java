@@ -1,33 +1,24 @@
 package com.moggendorf.solitaire;
 
-import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
-import java.io.IOException;
 
-public class Card {
-    private static BufferedImage back;
-    static {
-        try {
-            back = ImageIO.read(Card.class.getResource(Const.CARD_PATH + "back.gif"));
-        } catch (IOException ignore) { }
-    }
-
+public class Card implements Cloneable {
     private int x;
     private int y;
-    private boolean faceUp;
     private int value;
+    private boolean faceUp;
     private SuitColor color;
+    private BufferedImage back; // saving a ref to the back here if maybe different backs are necessary one time
     private BufferedImage image;
 
-    public Card(int idx) {
-        initCard(idx);
+    public Card(int idx, ImageCache cache) {
+        initCard(idx, cache);
     }
 
-    private void initCard(int idx) {
-        try {
-            image = ImageIO.read(Card.class.getResource(Const.CARD_PATH + (idx + 1) + ".gif"));
-        } catch (IOException ignore) { }
+    private void initCard(int idx, ImageCache cache) {
+        back = ImageCache.getBack();
+        image = ImageCache.getImages()[idx];
         value = idx % 13 + 1;
         color = SuitColor.getForID(idx / 13);
     }
@@ -70,6 +61,12 @@ public class Card {
 
     @Override
     public String toString() {
-        return color + " " + value;
+        return color + " " + value + "(" + x +", " + y +")";
+    }
+
+    // for redo
+    @Override
+    protected Object clone() throws CloneNotSupportedException {
+        return super.clone();
     }
 }

@@ -6,12 +6,13 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 
 public class InfoPanel extends JPanel {
-    private Display canvas;
+    private Display display;
+    private JButton back;
     private JButton newGame;
     private JButton quit;
 
-    public InfoPanel(Display canvas) {
-        this.canvas = canvas;
+    public InfoPanel(Display display) {
+        this.display = display;
         initComponents();
     }
 
@@ -23,7 +24,9 @@ public class InfoPanel extends JPanel {
         add(Box.createHorizontalGlue());
 
         ActionListener al = new InfoActionListener();
-
+        back = new JButton("<- back");
+        back.addActionListener(al);
+        add(back);
         newGame = new JButton("New Game");
         newGame.addActionListener(al);
         add(newGame);
@@ -36,9 +39,11 @@ public class InfoPanel extends JPanel {
         @Override
         public void actionPerformed(ActionEvent evt) {
             if (evt.getSource() == newGame) {
-                canvas.startNewGame();
+                display.startNewGame();
             } else if (evt.getSource() == quit) {
                 System.exit(0);
+            } else if (evt.getSource() == back) {
+                display.restorePrevState();
             }
         }
     }
