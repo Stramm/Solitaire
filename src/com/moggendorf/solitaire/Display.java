@@ -74,6 +74,34 @@ public class Display extends JPanel {
         for (Card card : draggedCards)
             card.drawCard(g2);
     }
+    private void saveState() {
+        continuousRedo = false;
+        try {
+            previousStates.push((Layout)layout.clone());
+        } catch (CloneNotSupportedException e) {
+            previousStates.clear();
+        }
+    }
+
+    public void restorePrevState() {
+        if (previousStates.isEmpty())
+            return;
+
+        if (!continuousRedo)
+            previousStates.pop();
+        continuousRedo = true;
+
+        if (!previousStates.isEmpty()) {
+            layout = previousStates.pop();
+            draggedCards.clear();
+        }
+
+        if (previousStates.isEmpty())
+            saveState();
+
+        repaint();
+    }
+
     class MyMouseListener extends MouseAdapter {
         private boolean selected;
         private int dx;
@@ -85,8 +113,8 @@ public class Display extends JPanel {
 
         @Override
         public void mousePressed(MouseEvent e) {
-            // for cards on the base (top right)
-            if (e.getY() > Const.FOUNDATION_STARTY && e.getY() < Const.FOUNDATION_STARTY + Const.CARD_HEIGHT
+            // for flipping the cards on the base (top right)
+            if (e.getButton() == MouseEvent.BUTTON1 && e.getY() > Const.FOUNDATION_STARTY && e.getY() < Const.FOUNDATION_STARTY + Const.CARD_HEIGHT
                     && e.getX() > Const.BASE_STARTX && e.getX() < Const.BASE_STARTX + Const.CARD_WIDTH) {
                 // a click inside the base area... now check more precise
                 if (!layout.getBase().isEmpty()) {
@@ -106,8 +134,9 @@ public class Display extends JPanel {
                 saveState();
                 repaint();
 
-                // rmb on open base for quick drop to foundation
+                // all rmb actions from here on: 1. open base for quick drop to foundation
             } else if (e.getButton() == MouseEvent.BUTTON3) {
+                // rmb on open base
                 if (e.getY() > Const.BASE_OPEN_STARTY && e.getY() < Const.BASE_OPEN_STARTY + Const.CARD_HEIGHT
                         && e.getX() > Const.BASE_OPEN_STARTX && e.getX() < Const.BASE_OPEN_STARTX + Const.CARD_WIDTH) {
 
@@ -117,38 +146,35 @@ public class Display extends JPanel {
                         backToOrigin();
                         repaint();
                     }
-                } else { // rmb on columns for quick drop to foundation
+                } else { // 2. rmb on columns for quick drop to foundation or move to other columns
                     for (int idx = 0; idx < layout.getColumns().size(); idx++) {
                         // if the current column is empty, go to the next
                         LinkedList<Card> column = getColumn(idx);
                         if (column.isEmpty())
                             continue;
 
-                        for (int idy = column.size() - 1; idy >= 0; idy--) {
-                            Card currCard = column.get(idy);
+                        // get the index of the clicked card (if valid)
+                        int idy = clickCardIndexInColumn(column, e.getX(), e.getY());
 
-                            // if the card is not faceup, then we can continue
-                            if (!currCard.isFaceUp())
-                                break; // to next column
-                            if (e.getX() > currCard.getX() && e.getX() < currCard.getX() + Const.CARD_WIDTH
-                                    && e.getY() > currCard.getY() && e.getY() < currCard.getY() + Const.CARD_HEIGHT) {
-                                // rmb on columns
-                                selectToDrag(getColumn(idx), idy);
-                                origin = idx;
-                                source = Source.COLUMN;
+                        if (idy != -1) {
+                            // all cards from the selected on copied to draggedCards list
+                            selectToDrag(getColumn(idx), idy);
+                            origin = idx;
+                            source = Source.COLUMN;
 
-                                if (draggedCards.size() == 1) {
-                                    if (!tryFitsOnFoundation() && !tryFitsOnColumn()) {
-                                        backToOrigin();
-                                        repaint();
-                                    }
-                                } else {
-                                    if (!tryFitsOnColumn()) {
-                                        backToOrigin();
-                                        repaint();
-                                    }
+                            if (draggedCards.size() == 1) { // if only one card is selected we try to place it on found. and columns
+                                if (!tryFitsOnFoundation() && !tryFitsOnColumn()) {
+                                    backToOrigin();
+                                    repaint();
+                                }
+                            } else { // more cards selected, try to fit on only on another colum
+                                if (!tryFitsOnColumn()) {
+                                    backToOrigin();
+                                    repaint();
+                                    return;
                                 }
                             }
+
                         }
                     } // end for idx;
                 }
@@ -259,26 +285,19 @@ public class Display extends JPanel {
                         continue;
 
                     // go through the cards in the current column (from the last (upper) to the first)
-                    for (int idy = column.size() - 1; idy >= 0; idy--) {
+                    int idy = clickCardIndexInColumn(column, e.getX(), e.getY());
+
+                    if (idy != -1) {
                         Card currCard = column.get(idy);
-
-                        // if the card is not faceup, then we can continue
-                        if (!currCard.isFaceUp())
-                            break; // to next column
-
-                        // finally we can check if the mouse cursor is inside the current cards dimensions
-                        if (e.getX() > currCard.getX() && e.getX() < currCard.getX() + Const.CARD_WIDTH
-                                && e.getY() > currCard.getY() && e.getY() < currCard.getY() + Const.CARD_HEIGHT) {
-                            // we have a hit, that's the card we want to drag. The boolean saves that found condition
-                            selected = true;
-                            source = Source.COLUMN;
-                            origin = idx; // save the origin columns index
-                            // move all selected cards to the draggedCards list (removing from the column)
-                            selectToDrag(column, idy); // saved in draggedCards
-                            dx = e.getX() - currCard.getX(); // and save the cursor to card edge difference for a smooth drag start
-                            dy = e.getY() - currCard.getY();
-                            return; // and end the execution of this method
-                        }
+                        // we have a hit, that's the card we want to drag. The boolean saves that found condition
+                        selected = true;
+                        source = Source.COLUMN;
+                        origin = idx; // save the origin columns index
+                        // move all selected cards to the draggedCards list (removing from the column)
+                        selectToDrag(column, idy); // saved in draggedCards
+                        dx = e.getX() - currCard.getX(); // and save the cursor to card edge difference for a smooth drag start
+                        dy = e.getY() - currCard.getY();
+                        return; // and end the execution of this method
                     }
                 }
                 // checking a drag on the foundation
@@ -390,6 +409,23 @@ public class Display extends JPanel {
             return false;
         }
 
+        private int clickCardIndexInColumn(LinkedList<Card> column, int clickX, int clickY) {
+            for (int idy = column.size() - 1; idy >= 0; idy--) {
+                Card currCard = column.get(idy);
+
+                // if the card is not faceup, then this is not a valid selection
+                if (!currCard.isFaceUp())
+                    return -1; // to next column
+
+                if (clickX > currCard.getX() && clickX < currCard.getX() + Const.CARD_WIDTH
+                        && clickY > currCard.getY() && clickY < currCard.getY() + Const.CARD_HEIGHT) {
+                    // found a click on a face up card in the column, return its index
+                    return idy;
+                }
+            }
+            return -1;
+        }
+
         private void faceUp() {
             if (!getColumn(origin).isEmpty())
                 getColumn(origin).getLast().setFaceUp(true);
@@ -456,6 +492,7 @@ public class Display extends JPanel {
 
         }
 
+        // todo: add nicer restart and win animation
         private boolean testWin() {
             if (!layout.getOpenBase().isEmpty() || !layout.getBase().isEmpty())
                 return false; // base has to be empty for a win
@@ -471,6 +508,7 @@ public class Display extends JPanel {
                 }
             }
             allColumnToFoundation();
+
             int newGame = JOptionPane.showConfirmDialog(null, "You won this game! Start a new one?", "You won", JOptionPane.YES_NO_OPTION);
             if (newGame == JOptionPane.YES_OPTION)
                 startNewGame();
@@ -480,7 +518,8 @@ public class Display extends JPanel {
             return true;
         }
 
-        // win... move all column cards to foundation
+        // if win detected in testWin... move all column cards to foundation...
+        // todo: add animation moving cards to foundation
         private void allColumnToFoundation() {
             for (int val = 1; val <= 13; val++) {
                 for (int i = 0; i < Const.COLUMNS; i++) {
@@ -518,34 +557,5 @@ public class Display extends JPanel {
 
     } // end MouseAdapter
 
-    private void saveState() {
-        continuousRedo = false;
-        try {
-            previousStates.push((Layout)layout.clone());
-        } catch (CloneNotSupportedException e) {
-            previousStates.clear();
-        }
-    }
-
-    public void restorePrevState() {
-        if (previousStates.isEmpty())
-            return;
-
-        if (!continuousRedo)
-            previousStates.pop();
-        continuousRedo = true;
-
-        if (previousStates.isEmpty()) {
-            saveState();
-            return;
-        }
-
-        layout = previousStates.pop();
-        draggedCards.clear();
-
-        if (previousStates.isEmpty())
-            saveState();
-
-        repaint();
-    }
 }
+
