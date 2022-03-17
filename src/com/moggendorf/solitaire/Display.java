@@ -431,6 +431,8 @@ public class Display extends JPanel {
         private void faceUp() {
             if (!getColumn(origin).isEmpty())
                 getColumn(origin).getLast().setFaceUp(true);
+
+            testWin();
         }
 
         private int getColumnX(int idx) {
@@ -447,18 +449,18 @@ public class Display extends JPanel {
 
         private void backToOrigin() {
             switch (source) {
-                case COLUMN -> {
+                case COLUMN :
                     updateDraggedPosition(getColumnX(origin), getColumnY(origin));
                     moveToDestColumn(origin);
-                }
-                case FOUNDATION -> {
+                    break;
+                case FOUNDATION :
                     updateDraggedPosition(getColumnX(origin), Const.FOUNDATION_STARTY);
                     moveToDestFoundation(origin);
-                }
-                case BASE -> {
+                    break;
+                case BASE :
                     updateDraggedPosition(Const.BASE_OPEN_STARTX, Const.BASE_OPEN_STARTY);
                     moveToOpenBase();
-                }
+                    break;
             }
             repaint();
         }
