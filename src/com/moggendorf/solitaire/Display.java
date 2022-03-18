@@ -496,7 +496,6 @@ public class Display extends JPanel {
 
         }
 
-        // todo: add nicer restart and win animation
         private boolean testWin() {
             if (!layout.getOpenBase().isEmpty() || !layout.getBase().isEmpty())
                 return false; // base has to be empty for a win
@@ -511,20 +510,29 @@ public class Display extends JPanel {
                         return false;
                 }
             }
-            allColumnToFoundation();
 
-            int newGame = JOptionPane.showConfirmDialog(null, "You won this game! Start a new one?", "You won", JOptionPane.YES_NO_OPTION);
-            if (newGame == JOptionPane.YES_OPTION)
-                startNewGame();
-            else
-                endGame();
+            showMoveToFoundationAnimation();
 
             return true;
         }
 
+        private void showMoveToFoundationAnimation() {
+            // start move to foundation animation in a new thread to avoid repaint optimization (just adding to the queue)
+            new Thread(() -> {
+                try {
+                    moveAllColumnsToFoundation();
+
+                    int newGame = JOptionPane.showConfirmDialog(null, "You won this game! Start a new one?", "You won", JOptionPane.YES_NO_OPTION);
+                    if (newGame == JOptionPane.YES_OPTION)
+                        startNewGame();
+                    else
+                        endGame();
+                } catch (InterruptedException ignore) {}
+            }).start();
+        }
+
         // if win detected in testWin... move all column cards to foundation...
-        // todo: add animation moving cards to foundation
-        private void allColumnToFoundation() {
+        private void moveAllColumnsToFoundation() throws InterruptedException {
             for (int val = 1; val <= 13; val++) {
                 for (int i = 0; i < Const.COLUMNS; i++) {
 
@@ -542,7 +550,8 @@ public class Display extends JPanel {
                                 source.setY(Const.FOUNDATION_STARTY);
 
                                 layout.getFoundation().get(idf).add(source);
-
+                                // todo: add animation flying cards
+                                Thread.sleep(175);
                                 repaint();
                             }
                         }
